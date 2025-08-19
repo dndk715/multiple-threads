@@ -3,9 +3,14 @@ package com.example.multiplethreads.controller;
 import com.example.multiplethreads.service.ThreadCompletionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -18,70 +23,112 @@ public class ThreadController {
     private final ThreadCompletionService threadCompletionService;
 
     /**
-     * CompletableFuture를 사용한 여러 스레드 작업 실행
+     * 각 task를 개별 서비스의 함수로 실행하고 압축하여 다운로드 (새로운 방식)
      */
-    @GetMapping("/completable-future")
-    public ResponseEntity<Map<String, Object>> runCompletableFutureTasks() {
-        log.info("CompletableFuture를 사용한 여러 스레드 작업을 시작합니다.");
+    @GetMapping("/create-files-with-service-and-download")
+    public ResponseEntity<byte[]> createFilesWithServiceAndDownload() {
+        log.info("각 task를 개별 서비스의 함수로 실행하고 압축하여 다운로드합니다 (새로운 방식).");
         
         long startTime = System.currentTimeMillis();
         
         try {
-            threadCompletionService.processMultipleTasksAndWait();
+            // 새로운 서비스 기반 파일 생성 및 압축
+            byte[] zipData = threadCompletionService.createFilesWithServiceAndCompress();
             
             long endTime = System.currentTimeMillis();
             long duration = endTime - startTime;
             
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "success");
-            response.put("message", "모든 작업이 완료되었습니다.");
-            response.put("totalDuration", duration + "ms");
-            response.put("method", "CompletableFuture");
+            // 파일명에 타임스탬프 추가
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String filename = "service_generated_files_" + timestamp + ".zip";
             
-            return ResponseEntity.ok(response);
+            log.info("서비스 기반 파일 생성 및 압축 완료: {} (소요시간: {}ms)", filename, duration);
             
-        } catch (Exception e) {
-            log.error("작업 실행 중 오류 발생", e);
+            // 파일 다운로드 응답 헤더 설정
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.setContentDispositionFormData("attachment", filename);
+            headers.setContentLength(zipData.length);
             
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "error");
-            response.put("message", "작업 실행 중 오류가 발생했습니다: " + e.getMessage());
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(zipData);
             
-            return ResponseEntity.internalServerError().body(response);
+        } catch (IOException e) {
+            log.error("서비스 기반 파일 생성 및 압축 중 오류 발생", e);
+            
+            // 오류 발생 시 JSON 응답으로 변경
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", "서비스 기반 파일 생성 및 압축 중 오류가 발생했습니다: " + e.getMessage());
+            errorResponse.put("timestamp", System.currentTimeMillis());
+            
+            // JSON 응답을 위한 헤더 설정
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            
+            // JSON 문자열을 바이트 배열로 변환
+            String jsonResponse = "{\"status\":\"error\",\"message\":\"" + e.getMessage() + "\"}";
+            byte[] jsonBytes = jsonResponse.getBytes();
+            
+            return ResponseEntity.internalServerError()
+                    .headers(headers)
+                    .body(jsonBytes);
         }
     }
 
     /**
-     * CountDownLatch를 사용한 여러 스레드 작업 실행
+     * 실패 시나리오 테스트: 일부 작업이 실패하는 경우 (테스트용)
      */
-    @GetMapping("/countdown-latch")
-    public ResponseEntity<Map<String, Object>> runCountDownLatchTasks() {
-        log.info("CountDownLatch를 사용한 여러 스레드 작업을 시작합니다.");
+    @GetMapping("/create-files-with-failure-and-download")
+    public ResponseEntity<byte[]> createFilesWithFailureAndDownload() {
+        log.info("실패 시나리오 테스트: 일부 작업이 실패하는 경우를 테스트합니다.");
         
         long startTime = System.currentTimeMillis();
         
         try {
-            threadCompletionService.processWithCountDownLatch();
+            // 실패 시나리오 테스트
+            byte[] zipData = threadCompletionService.executeAllTasksWithFailure();
             
             long endTime = System.currentTimeMillis();
             long duration = endTime - startTime;
             
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "success");
-            response.put("message", "모든 작업이 완료되었습니다.");
-            response.put("totalDuration", duration + "ms");
-            response.put("method", "CountDownLatch");
+            // 파일명에 타임스탬프 추가
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String filename = "failure_test_files_" + timestamp + ".zip";
             
-            return ResponseEntity.ok(response);
+            log.info("실패 시나리오 테스트 완료: {} (소요시간: {}ms)", filename, duration);
             
-        } catch (Exception e) {
-            log.error("작업 실행 중 오류 발생", e);
+            // 파일 다운로드 응답 헤더 설정
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.setContentDispositionFormData("attachment", filename);
+            headers.setContentLength(zipData.length);
             
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "error");
-            response.put("message", "작업 실행 중 오류가 발생했습니다: " + e.getMessage());
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(zipData);
             
-            return ResponseEntity.internalServerError().body(response);
+        } catch (IOException e) {
+            log.error("실패 시나리오 테스트 중 오류 발생", e);
+            
+            // 오류 발생 시 JSON 응답으로 변경
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", "실패 시나리오 테스트 중 오류가 발생했습니다: " + e.getMessage());
+            errorResponse.put("timestamp", System.currentTimeMillis());
+            
+            // JSON 응답을 위한 헤더 설정
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            
+            // JSON 문자열을 바이트 배열로 변환
+            String jsonResponse = "{\"status\":\"error\",\"message\":\"" + e.getMessage() + "\"}";
+            byte[] jsonBytes = jsonResponse.getBytes();
+            
+            return ResponseEntity.internalServerError()
+                    .headers(headers)
+                    .body(jsonBytes);
         }
     }
 

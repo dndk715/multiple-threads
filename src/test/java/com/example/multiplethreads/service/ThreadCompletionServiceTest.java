@@ -17,18 +17,18 @@ class ThreadCompletionServiceTest {
     private ThreadCompletionService threadCompletionService;
 
     @Test
-    void testProcessMultipleTasksAndWait() {
+    void testCreateFilesWithServiceAndCompress() {
         // 테스트 실행
         assertDoesNotThrow(() -> {
-            threadCompletionService.processMultipleTasksAndWait();
+            threadCompletionService.createFilesWithServiceAndCompress();
         });
     }
 
     @Test
-    void testProcessWithCountDownLatch() {
-        // 테스트 실행
-        assertDoesNotThrow(() -> {
-            threadCompletionService.processWithCountDownLatch();
+    void testExecuteAllTasksWithFailure() {
+        // 실패 시나리오 테스트 - IOException이 발생해야 함
+        assertThrows(Exception.class, () -> {
+            threadCompletionService.executeAllTasksWithFailure();
         });
     }
 
